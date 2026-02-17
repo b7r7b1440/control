@@ -1,9 +1,9 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { 
-  Calculator, Plus, Trash2, MapPin, Eraser, CheckCircle2, Info, UserCheck 
+  Calculator, Plus, Trash2, MapPin, Eraser, CheckCircle2, Info, UserCheck, Wand2, Sparkles, Hash
 } from 'lucide-react';
 
 interface DistributionPanelProps {
@@ -13,7 +13,8 @@ interface DistributionPanelProps {
 }
 
 const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committees, onChange }) => {
-  const { updateCommitteeInfo, resetDistributionBackend, refreshData } = useApp();
+  const { updateCommitteeInfo, resetDistributionBackend, refreshData, runAutoDistribution } = useApp();
+  const [numCommitteesInput, setNumCommitteesInput] = useState<string>('');
 
   const distributedStats = useMemo(() => {
     const stats: Record<string | number, number> = {};
@@ -50,11 +51,24 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
 
   const totalSchoolStudents = stages.reduce((acc, s) => acc + s.total, 0);
 
+  const handleSmartDistribute = () => {
+    const count = parseInt(numCommitteesInput);
+    if (isNaN(count) || count <= 0) {
+        // إذا لم يدخل رقماً، نوزع على اللجان الموجودة حالياً
+        runAutoDistribution();
+    } else {
+        if (confirm(`سيتم إعادة إنشاء ${count} لجان بسعة 30 طالباً وتوزيع الطلاب آلياً. هل تود الاستمرار؟`)) {
+            runAutoDistribution(count);
+        }
+    }
+  };
+
   return (
     <div className="space-y-10 animate-fade-in pb-24" dir="rtl">
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl">
+        <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-8 bg-blue-500/10 rounded-full translate-x-1/2 -translate-y-1/2 group-hover:scale-150 transition-transform duration-1000"></div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">إجمالي طلاب المدرسة</p>
             <h4 className="text-5xl font-[1000] mt-2 tracking-tighter">{totalSchoolStudents}</h4>
             <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
@@ -97,16 +111,29 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
               <Calculator size={32} />
             </div>
             <div>
-              <h3 className="text-3xl font-[1000] text-slate-800 tracking-tighter">التوزيع المستقل</h3>
-              <p className="text-slate-400 font-bold">حدد عدد الطلاب لكل مرحلة وعدد الملاحظين المطلوب لكل لجنة</p>
+              <h3 className="text-3xl font-[1000] text-slate-800 tracking-tighter">توزيع اللجان</h3>
+              <p className="text-slate-400 font-bold">المعيار الافتراضي: 30 طالباً لكل لجنة مع خلط المراحل</p>
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 items-center">
+             <div className="flex items-center bg-slate-50 border border-slate-100 rounded-2xl px-4 py-1.5 gap-2">
+                <Hash size={16} className="text-slate-400" />
+                <input 
+                    type="number" 
+                    placeholder="عدد اللجان؟" 
+                    value={numCommitteesInput}
+                    onChange={(e) => setNumCommitteesInput(e.target.value)}
+                    className="bg-transparent border-none outline-none font-bold text-slate-800 w-24 text-center"
+                />
+             </div>
+             <button onClick={handleSmartDistribute} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 shadow-xl shadow-blue-200 flex items-center gap-3 transition-all active:scale-95 group">
+                <Wand2 size={18} className="group-hover:rotate-12" /> التوزيع الشامل (منع الغش)
+             </button>
              <button onClick={() => resetDistributionBackend()} className="px-6 py-3 bg-rose-50 text-rose-600 rounded-2xl font-black text-xs hover:bg-rose-100 border border-rose-100 flex items-center gap-2 transition-all">
                 <Eraser size={18} /> تصفير الجدول
              </button>
-             <button onClick={() => onChange([...committees, { id: Date.now(), name: String(committees.length + 1), location: `قاعة ${committees.length + 1}`, capacity: 20, invigilatorCount: 1, counts: {} }])} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-blue-600 transition-all shadow-lg flex items-center gap-2">
+             <button onClick={() => onChange([...committees, { id: Date.now(), name: String(committees.length + 1), location: `قاعة ${committees.length + 1}`, capacity: 30, invigilatorCount: 1, counts: {} }])} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-slate-800 transition-all shadow-lg flex items-center gap-2">
                 <Plus size={18} /> إضافة لجنة
              </button>
           </div>
@@ -137,7 +164,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                   return acc + (isNaN(val) ? 0 : val);
                 }, 0);
                 
-                const isOverCap = rowTotal > (comm.capacity || 20);
+                const isOverCap = rowTotal > (comm.capacity || 30);
 
                 return (
                   <tr key={comm.id} className="bg-white hover:bg-slate-50 transition-colors">

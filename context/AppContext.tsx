@@ -13,7 +13,7 @@ interface AppContextType {
   setCommittees: React.Dispatch<React.SetStateAction<Committee[]>>;
   login: (role: UserRole) => Promise<void>;
   logout: () => void;
-  runAutoDistribution: () => Promise<any>;
+  runAutoDistribution: (numCommittees?: number) => Promise<void>;
   resetDistributionBackend: (clearManual?: boolean) => Promise<void>;
   addStudentManual: (studentId: string, committeeId: string) => Promise<void>;
   refreshData: () => Promise<void>;
@@ -85,13 +85,117 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: c.id,
         name: c.name,
         location: c.location || '',
-        capacity: c.capacity || 20,
+        capacity: c.capacity || 30, // افتراضي 30
         invigilatorCount: c.invigilator_count || 1,
         counts: c.stage_counts || {}
       })));
     } catch (e) {
       addNotification('فشل تحديث البيانات من السحابة', 'ERROR');
     }
+  };
+
+  const runAutoDistribution = async (numCommittees?: number) => {
+    if (stages.length === 0) {
+      addNotification('يجب إضافة مراحل دراسية أولاً', 'ALERT');
+      return;
+    }
+
+    let targetCommittees = [...committees];
+
+    // إذا حدد المستخدم عدد لجان معين، نقوم بإنشاء لجان جديدة أو مسح الفائض
+    if (numCommittees && numCommittees > 0) {
+      const newComms: Committee[] = [];
+      for (let i = 1; i <= numCommittees; i++) {
+        newComms.push({
+          id: i, // سيتم استبداله عند الحفظ في Supabase
+          name: String(i),
+          location: `قاعة ${i}`,
+          capacity: 30, // المعيار الجديد 30
+          invigilatorCount: 1,
+          counts: {}
+        });
+      }
+      targetCommittees = newComms;
+    }
+
+    if (targetCommittees.length === 0) {
+      addNotification('يرجى إضافة لجان أو تحديد عدد اللجان المطلوب', 'ALERT');
+      return;
+    }
+
+    // 1. تصفير التوزيع
+    const tempCommittees = targetCommittees.map(c => ({ ...c, counts: {} as Record<number, number> }));
+    const stagePool = stages.map(s => ({ id: s.id, remaining: s.total }));
+
+    // 2. خوارزمية التوزيع المتداخل (منع الغش) - سعة 30
+    let allStudentsDistributed = false;
+    while (!allStudentsDistributed) {
+      let changesMadeInThisRound = false;
+
+      for (let i = 0; i < tempCommittees.length; i++) {
+        const comm = tempCommittees[i];
+        const capacity = comm.capacity || 30;
+        
+        // في كل لجنة، نمر على المراحل ونأخذ طالباً من كل مرحلة بالتبادل
+        for (let j = 0; j < stagePool.length; j++) {
+          const stage = stagePool[j];
+          const currentTotalInComm = Object.values(tempCommittees[i].counts).reduce((a, b) => a + b, 0);
+          
+          if (stage.remaining > 0 && currentTotalInComm < capacity) {
+            tempCommittees[i].counts[stage.id] = (tempCommittees[i].counts[stage.id] || 0) + 1;
+            stage.remaining--;
+            changesMadeInThisRound = true;
+          }
+        }
+      }
+      if (!changesMadeInThisRound) allStudentsDistributed = true;
+    }
+
+    // 3. التحقق من الطلاب المتبقين (في حال كانت اللجان غير كافية)
+    const totalRemaining = stagePool.reduce((a, b) => a + b.remaining, 0);
+    if (totalRemaining > 0) {
+      addNotification(`تنبيه: تبقى ${totalRemaining} طالب لم يتم توزيعهم. اللجان الحالية لا تكفي.`, 'ALERT');
+    }
+
+    // 4. الحفظ في السحابة
+    try {
+      // إذا كنا قد ولدنا لجان جديدة، يفضل مسح القديم أولاً في نظام حقيقي
+      // هنا سنقوم بتحديث اللجان الموجودة فقط أو الإضافة إذا كان numCommittees مرسلاً
+      if (numCommittees) {
+         // مسح اللجان القديمة وحفظ الجديدة (عملية حساسة)
+         await supabase.from('committees').delete().neq('name', '0'); // مسح افتراضي
+         for (const comm of tempCommittees) {
+            await supabase.from('committees').insert({
+               name: comm.name,
+               location: comm.location,
+               capacity: comm.capacity,
+               stage_counts: comm.counts
+            });
+         }
+      } else {
+         for (const comm of tempCommittees) {
+           await supabase.from('committees').update({ stage_counts: comm.counts }).eq('id', comm.id);
+         }
+      }
+      
+      addNotification('تم التوزيع الآلي بنجاح (سعة 30 طالب لكل لجنة)', 'SUCCESS');
+      await refreshData();
+    } catch (e) {
+      addNotification('فشل حفظ التوزيع في السحابة', 'ERROR');
+    }
+  };
+
+  const updateCommitteeInfo = async (id: string | number, updates: Partial<Committee>) => {
+    setCommittees(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.location !== undefined) dbUpdates.location = updates.location;
+    if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+    if (updates.counts !== undefined) dbUpdates.stage_counts = updates.counts;
+    if (updates.invigilatorCount !== undefined) dbUpdates.invigilator_count = updates.invigilatorCount;
+
+    const { error } = await supabase.from('committees').update(dbUpdates).eq('id', id);
+    if (error) addNotification('فشل الحفظ السحابي للجنة', 'ERROR');
   };
 
   const publishSchedule = async () => {
@@ -104,7 +208,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     schedule.days.forEach(day => {
       day.periods.forEach(period => {
-        const availableTeachersPool = [...period.main].sort(() => Math.random() - 0.5);
+        const sourcePool = (period.main && period.main.length > 0) ? period.main : teachers.map(t => t.id);
+        const availableTeachersPool = [...sourcePool].sort(() => Math.random() - 0.5);
         let teacherIndex = 0;
 
         const activeCommitteesForPeriod = committees.filter(comm => {
@@ -114,7 +219,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         activeCommitteesForPeriod.forEach(comm => {
           const committeeStages = Object.keys(comm.counts || {}).map(id => Number(id))
-                                       .sort((a, b) => a - b); // ترتيب المراحل تصاعدياً (أول، ثاني، ثالث)
+                                       .sort((a, b) => a - b);
           const subjects: string[] = [];
           const studentsList: Student[] = [];
           const grades: string[] = [];
@@ -134,7 +239,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
             grades.push(stage.name);
 
-            // توليد الطلاب مع حالة "حاضر" افتراضياً
             for(let i=0; i < countToTake; i++) {
                 studentsList.push({
                   id: `std-${sId}-${comm.id}-${i}`,
@@ -142,7 +246,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   studentId: `${stage.prefix}${i + 100}`,
                   grade: stage.name,
                   class: '1',
-                  status: AttendanceStatus.PRESENT, // افتراضي حاضر
+                  status: AttendanceStatus.PRESENT,
                   seatNumber: `${stage.prefix}${i + 100}`
                 });
             }
@@ -153,12 +257,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const assignedTeachers: User[] = [];
             
             for(let i=0; i < requiredInvigilators; i++) {
-                if (teacherIndex < availableTeachersPool.length) {
-                    const tId = availableTeachersPool[teacherIndex];
-                    const teacher = teachers.find(t => t.id === tId);
-                    if (teacher) assignedTeachers.push(teacher);
-                    teacherIndex++;
-                }
+                const tId = availableTeachersPool[teacherIndex % availableTeachersPool.length];
+                const teacher = teachers.find(t => t.id === tId);
+                if (teacher) assignedTeachers.push(teacher);
+                teacherIndex++;
             }
 
             generatedEnvelopes.push({
@@ -172,7 +274,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               endTime,
               period: `فترة ${period.periodId}`,
               status: EnvelopeStatus.PENDING,
-              students: studentsList, // مرتبة آلياً حسب المراحل التي تم ترتيبها بالأعلى
+              students: studentsList,
               teacherId: assignedTeachers.length > 0 ? assignedTeachers[0].id : undefined,
               teacherName: assignedTeachers.map(t => t.name).join(' / ') || 'لم يحدد'
             });
@@ -182,21 +284,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     setEnvelopes(generatedEnvelopes);
-    addNotification(`تم اعتماد المظاريف. جميع الطلاب "حاضرون" افتراضياً.`, 'SUCCESS');
+    addNotification(`تم اعتماد المظاريف. التوزيع تم آلياً بناءً على عدد الملاحظين.`, 'SUCCESS');
     window.location.hash = '#/control';
-  };
-
-  const updateCommitteeInfo = async (id: string | number, updates: Partial<Committee>) => {
-    setCommittees(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    const dbUpdates: any = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.location !== undefined) dbUpdates.location = updates.location;
-    if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
-    if (updates.counts !== undefined) dbUpdates.stage_counts = updates.counts;
-    if (updates.invigilatorCount !== undefined) dbUpdates.invigilator_count = updates.invigilatorCount;
-
-    const { error } = await supabase.from('committees').update(dbUpdates).eq('id', id);
-    if (error) addNotification('فشل الحفظ السحابي للجنة', 'ERROR');
   };
 
   const updateEnvelopeStatus = async (id: string, status: EnvelopeStatus) => {
@@ -232,7 +321,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = async (role: UserRole) => { setCurrentUser({ id: '1', name: 'المسؤول', civilId: '123', role }); };
   const logout = () => setCurrentUser(null);
   const updateSchool = (field: string, value: string) => setSchool(p => ({ ...p, [field]: value }));
-  const runAutoDistribution = async () => { await refreshData(); return null; };
   const addStudentManual = async () => {};
   const markAttendance = async (envId: string, studentId: string, status: AttendanceStatus) => { await updateStudentStatus(envId, studentId, status); };
   const submitEnvelope = async (id: string, status: EnvelopeStatus) => { await updateEnvelopeStatus(id, status); };
