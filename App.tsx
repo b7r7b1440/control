@@ -15,7 +15,8 @@ import { TeacherDashboard } from './pages/TeacherDashboard';
 import { AppData } from './types';
 
 const AppRoutes = () => {
-  const { currentUser, envelopes, rooms, teachers, school, updateSchool } = useApp();
+  // Fix: changed 'rooms' to 'committees' as 'rooms' is not defined in AppContext
+  const { currentUser, envelopes, committees, teachers, school, updateSchool } = useApp();
 
   if (!currentUser) return <Login />;
 
@@ -28,9 +29,10 @@ const AppRoutes = () => {
     );
   }
 
+  // Fix: mapped 'committees' correctly to match AppData structure
   const appData: AppData = {
     school,
-    committees: rooms.map(r => ({ id: r.id, name: r.name, location: r.name })),
+    committees: committees.map(c => ({ id: c.id, name: c.name, location: c.location })),
     rawExams: envelopes,
     teachers: teachers
   };

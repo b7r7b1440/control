@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Users, Calculator, CalendarDays, CheckCircle2, 
-  ChevronRight, ChevronLeft, Upload, Trash2, Rocket, Sparkles, ShieldCheck, Plus, UserCheck
+  ChevronRight, ChevronLeft, Trash2, Rocket, Sparkles, ShieldCheck, Plus, UserCheck, RefreshCcw
 } from 'lucide-react';
 import ImportWizard from '../components/setup/ImportWizard.tsx';
 import DistributionPanel from '../components/setup/DistributionPanel.tsx';
@@ -11,7 +11,7 @@ import ScheduleWizard from '../components/setup/ScheduleWizard.tsx';
 import TeachersWizard from '../components/setup/TeachersWizard.tsx';
 
 export const SetupCenter: React.FC = () => {
-  const { stages, committees, schedule, teachers, setStages, setCommittees, setSchedule, setTeachers, publishSchedule } = useApp();
+  const { stages, committees, schedule, teachers, setStages, setCommittees, setSchedule, setTeachers, publishSchedule, clearAllSystemData } = useApp();
   const [activeStep, setActiveStep] = useState(1);
   const [showImport, setShowImport] = useState(false);
 
@@ -42,7 +42,7 @@ export const SetupCenter: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6 md:space-y-10 animate-fade-in pb-24" dir="rtl">
       
-      {/* Step Header - Optimized for Mobile */}
+      {/* Step Header */}
       <div className="bg-white p-4 md:p-10 rounded-[2rem] md:rounded-[3.5rem] shadow-xl md:shadow-2xl shadow-blue-100/40 border border-slate-50 flex justify-between items-center relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-slate-50">
           <div 
@@ -67,6 +67,15 @@ export const SetupCenter: React.FC = () => {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="flex justify-end px-4">
+          <button 
+            onClick={clearAllSystemData}
+            className="text-rose-500 font-black text-xs flex items-center gap-2 hover:bg-rose-50 px-4 py-2 rounded-xl transition-all border border-rose-100"
+          >
+            <RefreshCcw size={14} /> تصفير النظام والبدء من جديد
+          </button>
       </div>
 
       {/* Content Area */}
@@ -133,7 +142,7 @@ export const SetupCenter: React.FC = () => {
         )}
       </div>
 
-      {/* Mobile-friendly Navigation buttons */}
+      {/* Navigation buttons */}
       {activeStep < 5 && !showImport && (
         <div className="fixed bottom-24 xl:relative xl:bottom-0 left-4 right-4 xl:left-0 xl:right-0 bg-white/90 backdrop-blur-xl xl:bg-white/80 p-4 md:p-6 rounded-3xl xl:rounded-[3rem] shadow-2xl border border-white z-40 flex justify-between items-center">
           <button onClick={handleBack} disabled={activeStep === 1} className="flex items-center gap-2 md:gap-3 px-6 md:px-10 py-3 md:py-5 rounded-xl md:rounded-[2rem] font-black text-slate-400 hover:bg-slate-50 disabled:opacity-30">

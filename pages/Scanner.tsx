@@ -4,23 +4,30 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { EnvelopeStatus, AttendanceStatus } from '../types';
 import { 
-  ChevronRight, UserCheck, UserX, AlertTriangle, Zap,
-  PackageCheck, ShieldCheck, Activity, Clock, QrCode
+  ChevronRight, UserCheck, UserX, PackageCheck, QrCode, ShieldCheck
 } from 'lucide-react';
 import { ScannerComponent } from '../components/ScannerComponent';
 
 const Scanner: React.FC = () => {
-  const { envelopes, updateEnvelopeStatus, updateStudentStatus, currentUser } = useApp();
+  const { envelopes, updateEnvelopeStatus, markAttendance, currentUser } = useApp();
   const navigate = useNavigate();
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const handleScan = (envelopeId: string) => {
-    const env = envelopes.find(e => e.id === envelopeId || e.committeeNumber === envelopeId);
+  const handleScan = (scannedText: string) => {
+    // تنظيف النص الممسوح من المسافات
+    const committeeId = scannedText.trim();
+    const today = new Date().toISOString().split('T')[0];
+
+    // البحث عن المظروف المطابق لرقم اللجنة وتاريخ اليوم
+    const env = envelopes.find(e => 
+        (e.committeeNumber === committeeId || e.id === committeeId) && 
+        e.date === today
+    );
     
     if (!env) {
-      setError("الرمز الممسوح غير صالح أو المظروف غير موجود");
+      setError(`اللجنة رقم (${committeeId}) غير مجدولة لتاريخ اليوم ${today}`);
       return;
     }
 
@@ -73,11 +80,11 @@ const Scanner: React.FC = () => {
                       </div>
                       <div className="flex gap-2">
                           <button 
-                            onClick={() => updateStudentStatus(activeSession, student.id, AttendanceStatus.PRESENT)}
+                            onClick={() => markAttendance(activeSession, student.id, AttendanceStatus.PRESENT)}
                             className={`p-3 rounded-xl ${student.status === AttendanceStatus.PRESENT ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}
                           ><UserCheck size={18}/></button>
                           <button 
-                            onClick={() => updateStudentStatus(activeSession, student.id, AttendanceStatus.ABSENT)}
+                            onClick={() => markAttendance(activeSession, student.id, AttendanceStatus.ABSENT)}
                             className={`p-3 rounded-xl ${student.status === AttendanceStatus.ABSENT ? 'bg-rose-500 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}
                           ><UserX size={18}/></button>
                       </div>
@@ -107,7 +114,7 @@ const Scanner: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl text-[10px] font-black border border-rose-100 animate-fade-in">
+        <div className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl text-[10px] font-black border border-rose-100 animate-fade-in max-w-sm text-center">
           {error}
         </div>
       )}

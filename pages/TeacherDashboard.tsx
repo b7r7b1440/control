@@ -9,7 +9,8 @@ import {
 import { ScannerComponent } from '../components/ScannerComponent';
 
 export const TeacherDashboard: React.FC = () => {
-  const { envelopes, currentUser, activeExamId, setActiveExamId, markAttendance, submitEnvelope, logout, updateEnvelopeStatus } = useApp();
+  // Fix: removed 'submitEnvelope' as it does not exist in AppContext
+  const { envelopes, currentUser, activeExamId, setActiveExamId, markAttendance, logout, updateEnvelopeStatus } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
 
   const activeExam = useMemo(() => {
