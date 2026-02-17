@@ -3,45 +3,36 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>SEMS Pro v4.0 - نظام إدارة الاختبارات الذكي</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      :root {
-        --primary: #0f172a;
-        --accent: #3b82f6;
-      }
-      body {
-        font-family: 'Tajawal', sans-serif;
-        background-color: #fcfdfe;
-        color: #1e293b;
-        overflow-x: hidden;
-      }
-      .glass-card {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-      }
-      .animate-fade-in {
-        animation: fadeIn 0.5s ease-out forwards;
-      }
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar { width: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+      :root { --primary: #0f172a; --accent: #3b82f6; }
+      body { font-family: 'Tajawal', sans-serif; background-color: #fcfdfe; color: #1e293b; margin: 0; padding: 0; }
       
-      @media print {
-        .no-print { display: none !important; }
-        body { background: white; }
+      /* Splash Screen Style */
+      #loading-screen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #0f172a; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; z-index: 9999;
       }
+      .loader {
+        width: 50px; height: 50px; border: 5px solid #1e293b;
+        border-top: 5px solid #3b82f6; border-radius: 50%;
+        animation: spin 1s linear infinite; margin-top: 20px;
+      }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      .splash-logo { color: white; font-size: 2rem; font-weight: 900; letter-spacing: -1px; }
+
+      .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      
+      /* Hide scrollbar for cleaner mobile look */
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
   <script type="importmap">
 {
@@ -61,7 +52,21 @@
 <link rel="stylesheet" href="/index.css">
 </head>
   <body>
+    <div id="loading-screen">
+      <div class="splash-logo">SEMS <span style="color: #3b82f6;">PRO</span></div>
+      <div class="loader"></div>
+      <p style="color: #475569; margin-top: 20px; font-weight: bold; font-size: 0.8rem;">جاري تهيئة النظام السحابي...</p>
+    </div>
     <div id="root"></div>
+    <script>
+      // Hide loader once app is ready
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const loader = document.getElementById('loading-screen');
+          if (loader) loader.style.display = 'none';
+        }, 800);
+      });
+    </script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
