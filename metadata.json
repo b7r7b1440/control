@@ -1,0 +1,7 @@
+{
+  "name": "SEMS - Smart Exam Management System",
+  "description": "A comprehensive system for managing school exams through digital envelopes, QR tracking, and real-time attendance monitoring.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
