@@ -38,6 +38,14 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// دالة مساعدة للحصول على التاريخ المحلي بتنسيق YYYY-MM-DD
+const getLocalDateString = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [stages, setStages] = useState<Stage[]>([]);
   const [committees, setCommittees] = useState<Committee[]>([]);
@@ -76,7 +84,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           subject: e.subject,
           committeeNumber: e.committee_number,
           location: e.location,
-          date: e.date,
+          date: e.date, // يتم جلبه كما هو من قاعدة البيانات (YYYY-MM-DD)
           grades: e.grades,
           startTime: e.start_time,
           endTime: e.end_time,
@@ -86,26 +94,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           deliveryTime: e.delivery_time
       })));
       if (tea) setTeachers(tea.map(t => ({ id: t.id, name: t.name, civilId: t.civil_id, phone: t.phone, role: t.role as UserRole })));
-    } catch (e) { 
-      console.error('Error refreshing data - Connection issue likely', e); 
-    }
+    } catch (e) { console.error('Error refreshing data', e); }
   };
 
   const clearAllSystemData = async () => {
     if(!confirm('هل أنت متأكد؟ سيتم حذف كافة البيانات نهائياً.')) return;
     try {
-        const { error } = await supabase.rpc('clear_all_data');
-        if (error) {
-            await supabase.from('envelopes').delete().neq('id', '_');
-            await supabase.from('committees').delete().neq('name', '_');
-            await supabase.from('teachers').delete().neq('name', '_');
-            await supabase.from('stages').delete().neq('id', 0);
-        }
+        await supabase.rpc('clear_all_data');
         await refreshData();
         addNotification('تم تصفير النظام بنجاح', 'SUCCESS');
-    } catch (e: any) {
-        alert('حدث خطأ أثناء المسح: ' + e.message);
-    }
+    } catch (e: any) { alert('حدث خطأ أثناء المسح: ' + e.message); }
   };
 
   const runAutoDistribution = async (numCommittees?: number) => {
@@ -114,7 +112,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     for (let i = 1; i <= targetCount; i++) {
       localCommittees.push({ id: crypto.randomUUID(), name: String(i), location: `قاعة ${i}`, capacity: 30, invigilatorCount: 1, counts: {} });
     }
-
     if (stages.length > 0) {
       const stagePool = stages.map(s => ({ id: s.id, remaining: s.total }));
       let changesMade = true;
@@ -132,13 +129,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       }
     }
-    
     await supabase.from('committees').delete().neq('name', '_');
     const toInsert = localCommittees.map(c => ({ name: c.name, location: c.location, capacity: c.capacity, stage_counts: c.counts, invigilator_count: c.invigilatorCount }));
     await supabase.from('committees').insert(toInsert);
-    
     setCommittees(localCommittees);
-    addNotification(`تم توزيع اللجان بنجاح`, 'SUCCESS');
   };
 
   const publishSchedule = async () => {
@@ -153,12 +147,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return;
         }
 
-        const today = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalDateString();
         const newEnvelopesToInsert: any[] = [];
         
         const activeDays = schedule?.days && schedule.days.length > 0 ? schedule.days : [{
             dayId: 1,
-            date: today,
+            date: todayStr, // استخدام التاريخ المحلي اليوم
             periods: [{ periodId: 1, main: [], reserves: [], subjects: {} }]
         }];
 
@@ -178,7 +172,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         if (stage) {
                             for(let i=1; i<=Number(count); i++) {
                                 envStudents.push({
-                                    id: `s-${sId}-${comm.name}-${i}-${Math.random().toString(36).substr(2, 4)}`,
+                                    id: `s-${sId}-${comm.name}-${i}-${day.date}-${Math.random().toString(36).substr(2, 4)}`,
                                     name: `طالب ${stage.name} - ${i}`,
                                     studentId: `${stage.prefix}${i.toString().padStart(3, '0')}`,
                                     grade: stage.name,
@@ -195,7 +189,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         subject: finalSubject,
                         committee_number: String(comm.name),
                         location: comm.location,
-                        date: day.date,
+                        date: day.date, // استخدام تاريخ اليوم المحلي المسجل بالجدول
                         grades: commStageIds.map(id => stages.find(s => String(s.id) === id)?.name || ''),
                         start_time: '08:00',
                         end_time: '10:00',
@@ -207,27 +201,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
         });
 
-        // مسح المظاريف الحالية
-        const { error: deleteError } = await supabase.from('envelopes').delete().neq('id', '_');
-        if (deleteError) throw deleteError;
-
-        // الحفظ بدفعات صغيرة جداً (دفعة واحدة لكل مرة لضمان استقرار الاتصال)
+        await supabase.from('envelopes').delete().neq('id', '_');
         const total = newEnvelopesToInsert.length;
         for (let i = 0; i < total; i++) {
             const { error: insertError } = await supabase.from('envelopes').insert([newEnvelopesToInsert[i]]);
             if (insertError) throw insertError;
-            
             setPublishProgress(Math.round(((i + 1) / total) * 100));
-            // تأخير بسيط لمنح المتصفح فرصة للتنفس
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 40));
         }
-        
         await refreshData();
-        alert('تم الاعتماد وحفظ المظاريف سحابياً بنجاح.');
+        alert('تم الاعتماد بنجاح!');
         window.location.hash = '#/control';
     } catch (err: any) {
-        console.error('Critical Error:', err);
-        alert('خطأ سحابي: ' + (err.message || 'فشل الاتصال بـ Supabase. تأكد من SQL وصلاحيات RLS.'));
+        alert('خطأ سحابي: ' + err.message);
     } finally {
         setIsPublishing(false);
         setPublishProgress(0);
@@ -237,9 +223,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateEnvelopeStatus = async (id: string, status: EnvelopeStatus) => {
     const deliveryTime = status === EnvelopeStatus.DELIVERED ? new Date().toISOString() : null;
     const { error } = await supabase.from('envelopes').update({ status, delivery_time: deliveryTime }).eq('id', id);
-    if (!error) {
-        setEnvelopes(prev => prev.map(e => e.id === id ? { ...e, status, deliveryTime: deliveryTime || undefined } : e));
-    }
+    if (!error) setEnvelopes(prev => prev.map(e => e.id === id ? { ...e, status, deliveryTime: deliveryTime || undefined } : e));
   };
 
   const markAttendance = async (envId: string, studentId: string, status: AttendanceStatus) => {
@@ -247,20 +231,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!env) return;
     const updatedStudents = env.students.map(s => s.id === studentId ? { ...s, status } : s);
     const { error } = await supabase.from('envelopes').update({ students: updatedStudents }).eq('id', envId);
-    if (!error) {
-        setEnvelopes(prev => prev.map(e => e.id === envId ? { ...e, students: updatedStudents } : e));
-    }
+    if (!error) setEnvelopes(prev => prev.map(e => e.id === envId ? { ...e, students: updatedStudents } : e));
   };
 
   const login = async (role: UserRole) => { setCurrentUser({ id: '1', name: 'المسؤول', civilId: '123', role }); };
   const logout = () => setCurrentUser(null);
   const updateSchool = (field: string, value: string) => setSchool(p => ({ ...p, [field]: value }));
   const updateCommitteeInfo = async (id: string | number, updates: Partial<Committee>) => {
-      await supabase.from('committees').update({ 
-          location: updates.location, 
-          capacity: updates.capacity, 
-          stage_counts: updates.counts 
-      }).eq('id', id);
+      await supabase.from('committees').update({ location: updates.location, capacity: updates.capacity, stage_counts: updates.counts }).eq('id', id);
       setCommittees(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
   };
 

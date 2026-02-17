@@ -1,10 +1,15 @@
 
 -- ======================================================
--- SEMS PRO v4.5 - FULL DATABASE REPAIR
+-- SEMS PRO v4.6 - DATE SYNC FIX
 -- ======================================================
 
--- 1. STAGES
-CREATE TABLE IF NOT EXISTS stages (
+DROP TABLE IF EXISTS envelopes CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS committees CASCADE;
+DROP TABLE IF EXISTS teachers CASCADE;
+DROP TABLE IF EXISTS stages CASCADE;
+
+CREATE TABLE stages (
     id BIGINT PRIMARY KEY,
     name TEXT NOT NULL,
     total_students INTEGER DEFAULT 0,
@@ -12,22 +17,16 @@ CREATE TABLE IF NOT EXISTS stages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 2. STUDENTS
-CREATE TABLE IF NOT EXISTS students (
+CREATE TABLE teachers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    student_id TEXT,
-    stage_id BIGINT REFERENCES stages(id) ON DELETE CASCADE,
-    grade TEXT,
-    class TEXT,
+    civil_id TEXT UNIQUE NOT NULL,
     phone TEXT,
-    seat_number TEXT,
-    status TEXT DEFAULT 'PENDING',
+    role TEXT DEFAULT 'TEACHER',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 3. COMMITTEES
-CREATE TABLE IF NOT EXISTS committees (
+CREATE TABLE committees (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     location TEXT,
@@ -37,23 +36,12 @@ CREATE TABLE IF NOT EXISTS committees (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 4. TEACHERS
-CREATE TABLE IF NOT EXISTS teachers (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    civil_id TEXT UNIQUE NOT NULL,
-    phone TEXT,
-    role TEXT DEFAULT 'TEACHER',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- 5. ENVELOPES
-CREATE TABLE IF NOT EXISTS envelopes (
+CREATE TABLE envelopes (
     id TEXT PRIMARY KEY,
     subject TEXT,
     committee_number TEXT,
     location TEXT,
-    date DATE NOT NULL,
+    date DATE NOT NULL, -- حقل تاريخ نقي
     grades JSONB DEFAULT '[]'::jsonb,
     start_time TEXT,
     end_time TEXT,
@@ -64,21 +52,14 @@ CREATE TABLE IF NOT EXISTS envelopes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- تعطيل نظام الحماية RLS مؤقتاً لضمان عمل الـ Fetch بدون مشاكل
 ALTER TABLE stages DISABLE ROW LEVEL SECURITY;
-ALTER TABLE students DISABLE ROW LEVEL SECURITY;
 ALTER TABLE committees DISABLE ROW LEVEL SECURITY;
 ALTER TABLE teachers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE envelopes DISABLE ROW LEVEL SECURITY;
 
--- وظيفة المسح الشامل
 CREATE OR REPLACE FUNCTION clear_all_data()
 RETURNS void AS $$
 BEGIN
-    TRUNCATE envelopes CASCADE;
-    TRUNCATE students CASCADE;
-    TRUNCATE stages CASCADE;
-    TRUNCATE committees CASCADE;
-    TRUNCATE teachers CASCADE;
+    TRUNCATE envelopes, committees, teachers, stages CASCADE;
 END;
 $$ LANGUAGE plpgsql;

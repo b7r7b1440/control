@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { ScannerComponent } from '../components/ScannerComponent';
 
-const Scanner: React.FC = () => {
+export const Scanner: React.FC = () => {
   const { envelopes, updateEnvelopeStatus, markAttendance, currentUser } = useApp();
   const navigate = useNavigate();
   const [activeSession, setActiveSession] = useState<string | null>(null);
@@ -16,18 +16,24 @@ const Scanner: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleScan = (scannedText: string) => {
-    // تنظيف النص الممسوح من المسافات
     const committeeId = scannedText.trim();
-    const today = new Date().toISOString().split('T')[0];
+    
+    // الحصول على تاريخ اليوم المحلي الصرف (بدون UTC)
+    const localToday = new Date();
+    const year = localToday.getFullYear();
+    const month = String(localToday.getMonth() + 1).padStart(2, '0');
+    const day = String(localToday.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
 
-    // البحث عن المظروف المطابق لرقم اللجنة وتاريخ اليوم
-    const env = envelopes.find(e => 
-        (e.committeeNumber === committeeId || e.id === committeeId) && 
-        e.date === today
-    );
+    // البحث عن المظروف المطابق لرقم اللجنة وتاريخ اليوم المحلي
+    const env = envelopes.find(e => {
+        // تنظيف تاريخ المظروف من أي وقت زائد إن وجد (للاحتياط)
+        const envDate = String(e.date).split('T')[0];
+        return (e.committeeNumber === committeeId || e.id === committeeId) && envDate === todayStr;
+    });
     
     if (!env) {
-      setError(`اللجنة رقم (${committeeId}) غير مجدولة لتاريخ اليوم ${today}`);
+      setError(`اللجنة (${committeeId}) غير مجدولة لليوم (${todayStr}). تأكد من تاريخ الجدول.`);
       return;
     }
 

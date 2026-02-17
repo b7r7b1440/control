@@ -9,7 +9,6 @@ import {
 import { ScannerComponent } from '../components/ScannerComponent';
 
 export const TeacherDashboard: React.FC = () => {
-  // Fix: removed 'submitEnvelope' as it does not exist in AppContext
   const { envelopes, currentUser, activeExamId, setActiveExamId, markAttendance, logout, updateEnvelopeStatus } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -34,12 +33,21 @@ export const TeacherDashboard: React.FC = () => {
             
             <div className="w-full max-w-xs">
                 <ScannerComponent onScanSuccess={(id) => {
-                    const ex = envelopes.find(e => e.committeeNumber === id || e.id === id);
+                    const localToday = new Date();
+                    const todayStr = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`;
+                    
+                    const ex = envelopes.find(e => {
+                        const envDate = String(e.date).split('T')[0];
+                        return (e.committeeNumber === id || e.id === id) && envDate === todayStr;
+                    });
+
                     if (ex) { 
                         setActiveExamId(ex.id); 
                         if(ex.status === EnvelopeStatus.PENDING) updateEnvelopeStatus(ex.id, EnvelopeStatus.RECEIVED); 
                     }
-                    else alert("اللجنة غير مجدولة لليوم");
+                    else {
+                        alert(`اللجنة غير مجدولة لليوم (${todayStr}). يرجى مراجعة الكنترول.`);
+                    }
                 }} />
             </div>
         </div>
