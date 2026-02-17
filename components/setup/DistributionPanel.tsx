@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { 
-  Calculator, Plus, Trash2, MapPin, Eraser, CheckCircle2, Info, UserCheck, Wand2, Sparkles, Hash
+  Calculator, Plus, Trash2, MapPin, Eraser, CheckCircle2, Info, UserCheck, Wand2, Sparkles, Hash, AlertCircle
 } from 'lucide-react';
 
 interface DistributionPanelProps {
@@ -14,7 +14,7 @@ interface DistributionPanelProps {
 
 const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committees, onChange }) => {
   const { updateCommitteeInfo, resetDistributionBackend, refreshData, runAutoDistribution } = useApp();
-  const [numCommitteesInput, setNumCommitteesInput] = useState<string>('');
+  const [numCommitteesInput, setNumCommitteesInput] = useState<string>('25');
 
   const distributedStats = useMemo(() => {
     const stats: Record<string | number, number> = {};
@@ -52,15 +52,9 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
   const totalSchoolStudents = stages.reduce((acc, s) => acc + s.total, 0);
 
   const handleSmartDistribute = () => {
-    const count = parseInt(numCommitteesInput);
-    if (isNaN(count) || count <= 0) {
-        // إذا لم يدخل رقماً، نوزع على اللجان الموجودة حالياً
-        runAutoDistribution();
-    } else {
-        if (confirm(`سيتم إعادة إنشاء ${count} لجان بسعة 30 طالباً وتوزيع الطلاب آلياً. هل تود الاستمرار؟`)) {
-            runAutoDistribution(count);
-        }
-    }
+    const count = parseInt(numCommitteesInput) || 25;
+    // تنفيذ فوري دون أي تعطيل أو رسائل تأكيد
+    runAutoDistribution(count);
   };
 
   return (
@@ -133,111 +127,119 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
              <button onClick={() => resetDistributionBackend()} className="px-6 py-3 bg-rose-50 text-rose-600 rounded-2xl font-black text-xs hover:bg-rose-100 border border-rose-100 flex items-center gap-2 transition-all">
                 <Eraser size={18} /> تصفير الجدول
              </button>
-             <button onClick={() => onChange([...committees, { id: Date.now(), name: String(committees.length + 1), location: `قاعة ${committees.length + 1}`, capacity: 30, invigilatorCount: 1, counts: {} }])} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-slate-800 transition-all shadow-lg flex items-center gap-2">
+             <button onClick={() => onChange([...committees, { id: `manual-${Date.now()}`, name: String(committees.length + 1), location: `قاعة ${committees.length + 1}`, capacity: 30, invigilatorCount: 1, counts: {} }])} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-slate-800 transition-all shadow-lg flex items-center gap-2">
                 <Plus size={18} /> إضافة لجنة
              </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-[3rem] border border-slate-100">
-          <table className="w-full text-right border-collapse">
-            <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
-              <tr>
-                <th className="p-6 text-center border-l border-white/5">اللجنة</th>
-                <th className="p-6 border-l border-white/5">المقر</th>
-                <th className="p-6 text-center border-l border-white/5 bg-slate-800">سعة الطلاب</th>
-                <th className="p-6 text-center border-l border-white/5 bg-blue-900/50">عدد الملاحظين</th>
-                {stages.map(s => (
-                  <th key={s.id} className="p-6 text-center border-l border-white/5 bg-slate-800">
-                    {s.name}
-                  </th>
-                ))}
-                <th className="p-6 text-center bg-slate-900">إجمالي اللجنة</th>
-                <th className="p-6"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {committees.map((comm) => {
-                const currentCounts = comm.counts || {};
-                const rowTotal = stages.reduce((acc, stage) => {
-                  const val = parseInt(String(currentCounts[stage.id] || 0));
-                  return acc + (isNaN(val) ? 0 : val);
-                }, 0);
-                
-                const isOverCap = rowTotal > (comm.capacity || 30);
+        <div className="overflow-x-auto rounded-[3rem] border border-slate-100 min-h-[300px]">
+          {committees.length > 0 ? (
+            <table className="w-full text-right border-collapse">
+              <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
+                <tr>
+                  <th className="p-6 text-center border-l border-white/5">اللجنة</th>
+                  <th className="p-6 border-l border-white/5">المقر</th>
+                  <th className="p-6 text-center border-l border-white/5 bg-slate-800">سعة الطلاب</th>
+                  <th className="p-6 text-center border-l border-white/5 bg-blue-900/50">عدد الملاحظين</th>
+                  {stages.map(s => (
+                    <th key={s.id} className="p-6 text-center border-l border-white/5 bg-slate-800">
+                      {s.name}
+                    </th>
+                  ))}
+                  <th className="p-6 text-center bg-slate-900">إجمالي اللجنة</th>
+                  <th className="p-6"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {committees.map((comm) => {
+                  const currentCounts = comm.counts || {};
+                  const rowTotal = stages.reduce((acc, stage) => {
+                    const val = parseInt(String(currentCounts[stage.id] || 0));
+                    return acc + (isNaN(val) ? 0 : val);
+                  }, 0);
+                  
+                  const isOverCap = rowTotal > (comm.capacity || 30);
 
-                return (
-                  <tr key={comm.id} className="bg-white hover:bg-slate-50 transition-colors">
-                    <td className="p-6 text-center border-l border-slate-50 font-[1000] text-3xl text-slate-800">
-                       {comm.name}
-                    </td>
-                    
-                    <td className="p-6 border-l border-slate-50">
-                        <input 
-                          type="text" 
-                          value={comm.location} 
-                          onBlur={(e) => updateCommitteeInfo(comm.id, { location: e.target.value })}
-                          onChange={(e) => onChange(committees.map(c => c.id === comm.id ? {...c, location: e.target.value} : c))} 
-                          className="bg-transparent border-none font-black text-slate-700 outline-none text-lg w-full" 
-                        />
-                    </td>
+                  return (
+                    <tr key={comm.id} className="bg-white hover:bg-slate-50 transition-colors">
+                      <td className="p-6 text-center border-l border-slate-50 font-[1000] text-3xl text-slate-800">
+                         {comm.name}
+                      </td>
+                      
+                      <td className="p-6 border-l border-slate-50">
+                          <input 
+                            type="text" 
+                            value={comm.location} 
+                            onBlur={(e) => updateCommitteeInfo(comm.id, { location: e.target.value })}
+                            onChange={(e) => onChange(committees.map(c => c.id === comm.id ? {...c, location: e.target.value} : c))} 
+                            className="bg-transparent border-none font-black text-slate-700 outline-none text-lg w-full" 
+                          />
+                      </td>
 
-                    <td className="p-6 border-l border-slate-50 bg-slate-50/30">
-                      <div className="flex items-center justify-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-100 shadow-sm">
-                        <input 
-                          type="number" 
-                          value={comm.capacity} 
-                          onBlur={(e) => updateCommitteeInfo(comm.id, { capacity: Number(e.target.value) })}
-                          onChange={(e) => onChange(committees.map(c => c.id === comm.id ? {...c, capacity: Number(e.target.value)} : c))} 
-                          className="w-12 bg-transparent border-none text-center font-black text-blue-600 outline-none text-xl" 
-                        />
-                      </div>
-                    </td>
-
-                    <td className="p-6 border-l border-slate-50 bg-blue-50/20">
-                      <div className="flex items-center justify-center gap-2 bg-white px-3 py-2 rounded-xl border border-blue-100 shadow-sm">
-                         <UserCheck size={16} className="text-blue-500" />
-                        <input 
-                          type="number" 
-                          min="1"
-                          max="4"
-                          value={comm.invigilatorCount || 1} 
-                          onBlur={(e) => updateCommitteeInfo(comm.id, { invigilatorCount: Number(e.target.value) })}
-                          onChange={(e) => onChange(committees.map(c => c.id === comm.id ? {...c, invigilatorCount: Number(e.target.value)} : c))} 
-                          className="w-10 bg-transparent border-none text-center font-black text-slate-900 outline-none text-lg" 
-                        />
-                      </div>
-                    </td>
-
-                    {stages.map(s => (
-                      <td key={s.id} className="p-6 text-center border-l border-slate-50">
-                        <div className="flex flex-col gap-1 items-center">
-                            <input 
-                              type="text" 
-                              inputMode="numeric"
-                              placeholder="0"
-                              value={comm.counts?.[s.id] || ''}
-                              onChange={(e) => handleCellUpdate(comm.id, s.id, e.target.value)}
-                              className="w-20 h-16 text-center text-4xl font-[1000] text-slate-900 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none shadow-inner"
-                            />
+                      <td className="p-6 border-l border-slate-50 bg-slate-50/30">
+                        <div className="flex items-center justify-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-100 shadow-sm">
+                          <input 
+                            type="number" 
+                            value={comm.capacity} 
+                            onBlur={(e) => updateCommitteeInfo(comm.id, { capacity: Number(e.target.value) })}
+                            onChange={(e) => onChange(committees.map(c => c.id === comm.id ? {...c, capacity: Number(e.target.value)} : c))} 
+                            className="w-12 bg-transparent border-none text-center font-black text-blue-600 outline-none text-xl" 
+                          />
                         </div>
                       </td>
-                    ))}
 
-                    <td className="p-6 text-center bg-slate-900/5">
-                        <div className={`w-24 h-24 mx-auto rounded-[2.5rem] flex items-center justify-center font-[1000] text-5xl shadow-2xl transition-all duration-500 ${isOverCap ? 'bg-rose-500 text-white' : 'bg-slate-900 text-white'}`}>
-                            {rowTotal}
+                      <td className="p-6 border-l border-slate-50 bg-blue-50/20">
+                        <div className="flex items-center justify-center gap-2 bg-white px-3 py-2 rounded-xl border border-blue-100 shadow-sm">
+                           <UserCheck size={16} className="text-blue-500" />
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="4"
+                            value={comm.invigilatorCount || 1} 
+                            onBlur={(e) => updateCommitteeInfo(comm.id, { invigilatorCount: Number(e.target.value) })}
+                            onChange={(e) => onChange(committees.map(c => c.id === comm.id ? {...c, invigilatorCount: Number(e.target.value)} : c))} 
+                            className="w-10 bg-transparent border-none text-center font-black text-slate-900 outline-none text-lg" 
+                          />
                         </div>
-                    </td>
-                    
-                    <td className="p-6">
-                      <button onClick={() => { if(confirm('حذف اللجنة؟')) refreshData(); }} className="text-slate-200 hover:text-rose-500 transition-colors p-3 rounded-full hover:bg-rose-50"><Trash2 size={24}/></button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+
+                      {stages.map(s => (
+                        <td key={s.id} className="p-6 text-center border-l border-slate-50">
+                          <div className="flex flex-col gap-1 items-center">
+                              <input 
+                                type="text" 
+                                inputMode="numeric"
+                                placeholder="0"
+                                value={comm.counts?.[s.id] || ''}
+                                onChange={(e) => handleCellUpdate(comm.id, s.id, e.target.value)}
+                                className="w-20 h-16 text-center text-4xl font-[1000] text-slate-900 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none shadow-inner"
+                              />
+                          </div>
+                        </td>
+                      ))}
+
+                      <td className="p-6 text-center bg-slate-900/5">
+                          <div className={`w-24 h-24 mx-auto rounded-[2.5rem] flex items-center justify-center font-[1000] text-5xl shadow-2xl transition-all duration-500 ${isOverCap ? 'bg-rose-500 text-white' : 'bg-slate-900 text-white'}`}>
+                              {rowTotal}
+                          </div>
+                      </td>
+                      
+                      <td className="p-6">
+                        <button onClick={() => { if(confirm('حذف اللجنة؟')) refreshData(); }} className="text-slate-200 hover:text-rose-500 transition-colors p-3 rounded-full hover:bg-rose-50"><Trash2 size={24}/></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-4">
+               <AlertCircle size={48} className="text-slate-200" />
+               <p className="font-black text-lg">لا توجد لجان حالياً</p>
+               <p className="text-sm">أدخل عدد اللجان المطلوب واضغط على التوزيع الشامل للبدء</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
