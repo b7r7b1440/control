@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Users, Calculator, CalendarDays, CheckCircle2, 
-  ChevronRight, ChevronLeft, Trash2, Rocket, Sparkles, ShieldCheck, Plus, UserCheck, RefreshCcw
+  ChevronRight, ChevronLeft, Trash2, Rocket, Sparkles, ShieldCheck, Plus, UserCheck, RefreshCcw, Loader2
 } from 'lucide-react';
 import ImportWizard from '../components/setup/ImportWizard.tsx';
 import DistributionPanel from '../components/setup/DistributionPanel.tsx';
@@ -11,7 +11,7 @@ import ScheduleWizard from '../components/setup/ScheduleWizard.tsx';
 import TeachersWizard from '../components/setup/TeachersWizard.tsx';
 
 export const SetupCenter: React.FC = () => {
-  const { stages, committees, schedule, teachers, setStages, setCommittees, setSchedule, setTeachers, publishSchedule, clearAllSystemData } = useApp();
+  const { stages, committees, schedule, teachers, setStages, setCommittees, setSchedule, setTeachers, publishSchedule, clearAllSystemData, isPublishing, publishProgress } = useApp();
   const [activeStep, setActiveStep] = useState(1);
   const [showImport, setShowImport] = useState(false);
 
@@ -130,11 +130,31 @@ export const SetupCenter: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-[1000] text-slate-900 tracking-tighter">جاهز للإطلاق الحقيقي</h2>
               <p className="text-slate-400 text-lg md:text-xl font-bold px-4">تم ربط {stages.length} مراحل بـ {teachers.length} ملاحظ في {committees.length} لجنة.</p>
             </div>
-            <div className="flex flex-col gap-4 px-4">
-                <button onClick={publishSchedule} className="w-full bg-slate-900 text-white py-6 md:py-8 rounded-3xl md:rounded-[3rem] font-black text-xl md:text-3xl flex items-center justify-center gap-4 md:gap-6 shadow-2xl hover:bg-blue-600 transition-all">
-                  <ShieldCheck size={window.innerWidth < 768 ? 24 : 40} /> اعتماد وإصدار المظاريف
+            
+            <div className="flex flex-col gap-6 px-4">
+                {isPublishing && (
+                  <div className="w-full space-y-3">
+                    <div className="flex justify-between text-xs font-black text-slate-400">
+                      <span>جاري رفع المظاريف للسحابة...</span>
+                      <span>{publishProgress}%</span>
+                    </div>
+                    <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${publishProgress}%` }}></div>
+                    </div>
+                  </div>
+                )}
+
+                <button 
+                  onClick={publishSchedule} 
+                  disabled={isPublishing}
+                  className={`w-full py-6 md:py-8 rounded-3xl md:rounded-[3rem] font-black text-xl md:text-3xl flex items-center justify-center gap-4 md:gap-6 shadow-2xl transition-all ${
+                    isPublishing ? 'bg-slate-400 cursor-wait' : 'bg-slate-900 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  {isPublishing ? <Loader2 className="animate-spin" size={32} /> : <ShieldCheck size={window.innerWidth < 768 ? 24 : 40} />}
+                  {isPublishing ? 'جاري الاعتماد السحابي...' : 'اعتماد وإصدار المظاريف'}
                 </button>
-                <button onClick={handleBack} className="text-slate-400 font-black hover:text-slate-600 transition-colors flex items-center justify-center gap-2">
+                <button onClick={handleBack} disabled={isPublishing} className="text-slate-400 font-black hover:text-slate-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
                    <ChevronRight size={20} /> مراجعة البيانات والجدول
                 </button>
             </div>

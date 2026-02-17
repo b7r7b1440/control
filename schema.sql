@@ -1,6 +1,6 @@
 
 -- ======================================================
--- SEMS PRO v4.0 - DATABASE ARCHITECTURE (Supabase)
+-- SEMS PRO v4.5 - FULL DATABASE REPAIR
 -- ======================================================
 
 -- 1. STAGES
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS teachers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 5. ENVELOPES (الجدول الحيوي للمسح الضوئي)
+-- 5. ENVELOPES
 CREATE TABLE IF NOT EXISTS envelopes (
     id TEXT PRIMARY KEY,
     subject TEXT,
@@ -64,38 +64,21 @@ CREATE TABLE IF NOT EXISTS envelopes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 6. SCHOOL SETTINGS
-CREATE TABLE IF NOT EXISTS school_settings (
-    id INTEGER PRIMARY KEY DEFAULT 1,
-    name TEXT,
-    manager_name TEXT,
-    agent_name TEXT,
-    year TEXT,
-    term TEXT,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
+-- تعطيل نظام الحماية RLS مؤقتاً لضمان عمل الـ Fetch بدون مشاكل
+ALTER TABLE stages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE students DISABLE ROW LEVEL SECURITY;
+ALTER TABLE committees DISABLE ROW LEVEL SECURITY;
+ALTER TABLE teachers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE envelopes DISABLE ROW LEVEL SECURITY;
 
--- وظيفة لمسح كافة بيانات النظام
+-- وظيفة المسح الشامل
 CREATE OR REPLACE FUNCTION clear_all_data()
 RETURNS void AS $$
 BEGIN
-    DELETE FROM envelopes;
-    DELETE FROM students;
-    DELETE FROM stages;
-    DELETE FROM committees;
-    DELETE FROM teachers;
+    TRUNCATE envelopes CASCADE;
+    TRUNCATE students CASCADE;
+    TRUNCATE stages CASCADE;
+    TRUNCATE committees CASCADE;
+    TRUNCATE teachers CASCADE;
 END;
 $$ LANGUAGE plpgsql;
-
--- تفعيل RLS
-ALTER TABLE stages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE students ENABLE ROW LEVEL SECURITY;
-ALTER TABLE committees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teachers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE envelopes ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow All" ON stages FOR ALL USING (true);
-CREATE POLICY "Allow All" ON students FOR ALL USING (true);
-CREATE POLICY "Allow All" ON committees FOR ALL USING (true);
-CREATE POLICY "Allow All" ON teachers FOR ALL USING (true);
-CREATE POLICY "Allow All" ON envelopes FOR ALL USING (true);

@@ -13,6 +13,8 @@ interface AppContextType {
   students: Student[];
   teachers: User[];
   schedule: ExamSchedule | null;
+  isPublishing: boolean;
+  publishProgress: number;
   setStages: React.Dispatch<React.SetStateAction<Stage[]>>;
   setCommittees: React.Dispatch<React.SetStateAction<Committee[]>>;
   setTeachers: React.Dispatch<React.SetStateAction<User[]>>;
@@ -46,6 +48,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [schedule, setSchedule] = useState<ExamSchedule | null>(null);
   const [activeExamId, setActiveExamId] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishProgress, setPublishProgress] = useState(0);
   const [school, setSchool] = useState<School>({
     name: 'ثانوية الأمير عبدالمجيد',
     managerName: 'د. خالد العمري',
@@ -67,19 +71,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (stg) setStages(stg.map(s => ({ id: Number(s.id), name: s.name, prefix: s.prefix || '10', total: s.total_students || 0, students: [] })));
       if (com) setCommittees(com.map(c => ({ id: c.id, name: c.name, location: c.location || '', capacity: c.capacity, invigilatorCount: c.invigilator_count, counts: c.stage_counts || {} })));
-      if (env) setEnvelopes(env as ExamEnvelope[]);
+      if (env) setEnvelopes(env.map(e => ({
+          id: e.id,
+          subject: e.subject,
+          committeeNumber: e.committee_number,
+          location: e.location,
+          date: e.date,
+          grades: e.grades,
+          startTime: e.start_time,
+          endTime: e.end_time,
+          period: e.period,
+          status: e.status as EnvelopeStatus,
+          students: e.students,
+          deliveryTime: e.delivery_time
+      })));
       if (tea) setTeachers(tea.map(t => ({ id: t.id, name: t.name, civilId: t.civil_id, phone: t.phone, role: t.role as UserRole })));
-    } catch (e) { console.error('Error refreshing data', e); }
+    } catch (e) { 
+      console.error('Error refreshing data - Connection issue likely', e); 
+    }
   };
 
   const clearAllSystemData = async () => {
-    if(!confirm('هل أنت متأكد؟ سيتم حذف كافة الطلاب واللجان والمظاريف نهائياً.')) return;
-    await supabase.rpc('clear_all_data');
-    setStages([]);
-    setCommittees([]);
-    setEnvelopes([]);
-    setTeachers([]);
-    addNotification('تم تصفير النظام بالكامل بنجاح', 'ALERT');
+    if(!confirm('هل أنت متأكد؟ سيتم حذف كافة البيانات نهائياً.')) return;
+    try {
+        const { error } = await supabase.rpc('clear_all_data');
+        if (error) {
+            await supabase.from('envelopes').delete().neq('id', '_');
+            await supabase.from('committees').delete().neq('name', '_');
+            await supabase.from('teachers').delete().neq('name', '_');
+            await supabase.from('stages').delete().neq('id', 0);
+        }
+        await refreshData();
+        addNotification('تم تصفير النظام بنجاح', 'SUCCESS');
+    } catch (e: any) {
+        alert('حدث خطأ أثناء المسح: ' + e.message);
+    }
   };
 
   const runAutoDistribution = async (numCommittees?: number) => {
@@ -107,85 +133,104 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     }
     
-    // حفظ اللجان سحابياً
     await supabase.from('committees').delete().neq('name', '_');
     const toInsert = localCommittees.map(c => ({ name: c.name, location: c.location, capacity: c.capacity, stage_counts: c.counts, invigilator_count: c.invigilatorCount }));
     await supabase.from('committees').insert(toInsert);
     
     setCommittees(localCommittees);
-    addNotification(`تم توليد ${targetCount} لجنة وحفظها سحابياً`, 'SUCCESS');
+    addNotification(`تم توزيع اللجان بنجاح`, 'SUCCESS');
   };
 
   const publishSchedule = async () => {
-    if (committees.length === 0) {
-      addNotification('لا توجد لجان موزعة لاعتمادها', 'ALERT');
-      return;
-    }
+    if (isPublishing) return;
+    setIsPublishing(true);
+    setPublishProgress(0);
 
-    const today = new Date().toISOString().split('T')[0];
-    const newEnvelopes: any[] = [];
-    
-    const activeDays = schedule?.days.length ? schedule.days : [{
-        dayId: 1,
-        date: today,
-        periods: [{ periodId: 1, main: [], reserves: [], subjects: {} }]
-    }];
+    try {
+        if (committees.length === 0) {
+            alert('يرجى توزيع اللجان أولاً.');
+            setIsPublishing(false);
+            return;
+        }
 
-    activeDays.forEach(day => {
-        day.periods.forEach(period => {
-            committees.forEach(comm => {
-                const commStageIds = Object.keys(comm.counts);
-                const subjectsForComm = commStageIds.map(sId => {
-                    const stage = stages.find(s => String(s.id) === sId);
-                    return period.subjects?.[stage?.name || '']?.name || 'اختبار عام';
-                });
-                const finalSubject = [...new Set(subjectsForComm)].filter(s => s !== 'اختبار عام').join(' / ') || 'اختبار عام';
+        const today = new Date().toISOString().split('T')[0];
+        const newEnvelopesToInsert: any[] = [];
+        
+        const activeDays = schedule?.days && schedule.days.length > 0 ? schedule.days : [{
+            dayId: 1,
+            date: today,
+            periods: [{ periodId: 1, main: [], reserves: [], subjects: {} }]
+        }];
 
-                const envStudents: Student[] = [];
-                Object.entries(comm.counts).forEach(([sId, count]) => {
-                    const stage = stages.find(s => String(s.id) === sId);
-                    if (stage) {
-                        for(let i=1; i<=Number(count); i++) {
-                            envStudents.push({
-                                id: `std-${sId}-${comm.name}-${i}-${day.date}`,
-                                name: `طالب ${stage.name} - ${i}`,
-                                studentId: `${stage.prefix}${i.toString().padStart(3, '0')}`,
-                                grade: stage.name,
-                                class: '1',
-                                seatNumber: `${stage.prefix}${i.toString().padStart(3, '0')}`,
-                                status: AttendanceStatus.PENDING
-                            });
+        activeDays.forEach(day => {
+            day.periods.forEach(period => {
+                committees.forEach(comm => {
+                    const commStageIds = Object.keys(comm.counts);
+                    const subjectsForComm = commStageIds.map(sId => {
+                        const stage = stages.find(s => String(s.id) === sId);
+                        return period.subjects?.[stage?.name || '']?.name || 'اختبار عام';
+                    });
+                    const finalSubject = [...new Set(subjectsForComm)].filter(s => s !== 'اختبار عام').join(' / ') || 'اختبار عام';
+
+                    const envStudents: Student[] = [];
+                    Object.entries(comm.counts).forEach(([sId, count]) => {
+                        const stage = stages.find(s => String(s.id) === sId);
+                        if (stage) {
+                            for(let i=1; i<=Number(count); i++) {
+                                envStudents.push({
+                                    id: `s-${sId}-${comm.name}-${i}-${Math.random().toString(36).substr(2, 4)}`,
+                                    name: `طالب ${stage.name} - ${i}`,
+                                    studentId: `${stage.prefix}${i.toString().padStart(3, '0')}`,
+                                    grade: stage.name,
+                                    class: '1',
+                                    seatNumber: `${stage.prefix}${i.toString().padStart(3, '0')}`,
+                                    status: AttendanceStatus.PENDING
+                                });
+                            }
                         }
-                    }
-                });
+                    });
 
-                newEnvelopes.push({
-                    id: `env-${day.date}-${period.periodId}-${comm.name}`,
-                    subject: finalSubject,
-                    committee_number: String(comm.name),
-                    location: comm.location,
-                    date: day.date,
-                    grades: commStageIds.map(id => stages.find(s => String(s.id) === id)?.name || ''),
-                    start_time: '08:00',
-                    end_time: '10:00',
-                    period: String(period.periodId),
-                    status: EnvelopeStatus.PENDING,
-                    students: envStudents
+                    newEnvelopesToInsert.push({
+                        id: `env-${day.date}-${period.periodId}-${comm.name}-${Math.random().toString(36).substr(2, 6)}`,
+                        subject: finalSubject,
+                        committee_number: String(comm.name),
+                        location: comm.location,
+                        date: day.date,
+                        grades: commStageIds.map(id => stages.find(s => String(s.id) === id)?.name || ''),
+                        start_time: '08:00',
+                        end_time: '10:00',
+                        period: String(period.periodId),
+                        status: EnvelopeStatus.PENDING,
+                        students: envStudents
+                    });
                 });
             });
         });
-    });
 
-    // حفظ المظاريف في Supabase
-    await supabase.from('envelopes').delete().neq('id', '_');
-    const { error } = await supabase.from('envelopes').insert(newEnvelopes);
-    
-    if (error) {
-        addNotification('خطأ في الاعتماد السحابي: ' + error.message, 'ALERT');
-    } else {
+        // مسح المظاريف الحالية
+        const { error: deleteError } = await supabase.from('envelopes').delete().neq('id', '_');
+        if (deleteError) throw deleteError;
+
+        // الحفظ بدفعات صغيرة جداً (دفعة واحدة لكل مرة لضمان استقرار الاتصال)
+        const total = newEnvelopesToInsert.length;
+        for (let i = 0; i < total; i++) {
+            const { error: insertError } = await supabase.from('envelopes').insert([newEnvelopesToInsert[i]]);
+            if (insertError) throw insertError;
+            
+            setPublishProgress(Math.round(((i + 1) / total) * 100));
+            // تأخير بسيط لمنح المتصفح فرصة للتنفس
+            await new Promise(r => setTimeout(r, 50));
+        }
+        
         await refreshData();
-        addNotification(`تم اعتماد ${newEnvelopes.length} مظروف اختبار بنجاح سحابياً`, 'SUCCESS');
+        alert('تم الاعتماد وحفظ المظاريف سحابياً بنجاح.');
         window.location.hash = '#/control';
+    } catch (err: any) {
+        console.error('Critical Error:', err);
+        alert('خطأ سحابي: ' + (err.message || 'فشل الاتصال بـ Supabase. تأكد من SQL وصلاحيات RLS.'));
+    } finally {
+        setIsPublishing(false);
+        setPublishProgress(0);
     }
   };
 
@@ -211,7 +256,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => setCurrentUser(null);
   const updateSchool = (field: string, value: string) => setSchool(p => ({ ...p, [field]: value }));
   const updateCommitteeInfo = async (id: string | number, updates: Partial<Committee>) => {
-      // مزامنة فورية مع Supabase
       await supabase.from('committees').update({ 
           location: updates.location, 
           capacity: updates.capacity, 
@@ -224,7 +268,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      stages, committees, notifications, currentUser, school, envelopes, students, teachers, schedule,
+      stages, committees, notifications, currentUser, school, envelopes, students, teachers, schedule, isPublishing, publishProgress,
       setStages, setCommittees, setTeachers, setSchedule,
       login, logout, runAutoDistribution, resetDistributionBackend: async () => {}, clearAllSystemData,
       refreshData, addNotification, publishSchedule, updateEnvelopeStatus,
