@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { 
-  Calculator, Plus, Trash2, MapPin, Eraser, CheckCircle2, Info, UserCheck, Wand2, Sparkles, Hash, AlertCircle
+  Calculator, Plus, Trash2, MapPin, Eraser, CheckCircle2, Wand2, Hash, AlertCircle, UserCheck
 } from 'lucide-react';
 
 interface DistributionPanelProps {
@@ -15,6 +15,16 @@ interface DistributionPanelProps {
 const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committees, onChange }) => {
   const { updateCommitteeInfo, resetDistributionBackend, refreshData, runAutoDistribution } = useApp();
   const [numCommitteesInput, setNumCommitteesInput] = useState<string>('25');
+
+  // التعديل: ترتيب المراحل (أول، ثاني، ثالث)
+  const sortedStages = useMemo(() => {
+    const order = ['أول', 'ثاني', 'ثالث'];
+    return [...stages].sort((a, b) => {
+      const idxA = order.findIndex(o => a.name.includes(o));
+      const idxB = order.findIndex(o => b.name.includes(o));
+      return idxA - idxB;
+    });
+  }, [stages]);
 
   const distributedStats = useMemo(() => {
     const stats: Record<string | number, number> = {};
@@ -53,7 +63,6 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
 
   const handleSmartDistribute = () => {
     const count = parseInt(numCommitteesInput) || 25;
-    // تنفيذ فوري دون أي تعطيل أو رسائل تأكيد
     runAutoDistribution(count);
   };
 
@@ -70,7 +79,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
             </div>
         </div>
 
-        {stages.map(stage => {
+        {sortedStages.map(stage => {
           const distributed = distributedStats[stage.id] || 0;
           const remaining = stage.total - distributed;
           const isFull = distributed === stage.total;
@@ -122,7 +131,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                 />
              </div>
              <button onClick={handleSmartDistribute} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-700 shadow-xl shadow-blue-200 flex items-center gap-3 transition-all active:scale-95 group">
-                <Wand2 size={18} className="group-hover:rotate-12" /> التوزيع الشامل (منع الغش)
+                <Wand2 size={18} className="group-hover:rotate-12" /> التوزيع الشامل
              </button>
              <button onClick={() => resetDistributionBackend()} className="px-6 py-3 bg-rose-50 text-rose-600 rounded-2xl font-black text-xs hover:bg-rose-100 border border-rose-100 flex items-center gap-2 transition-all">
                 <Eraser size={18} /> تصفير الجدول
@@ -136,13 +145,14 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
         <div className="overflow-x-auto rounded-[3rem] border border-slate-100 min-h-[300px]">
           {committees.length > 0 ? (
             <table className="w-full text-right border-collapse">
-              <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
+              <thead className="bg-slate-900 text-white text-[12px] font-black uppercase tracking-widest">
                 <tr>
                   <th className="p-6 text-center border-l border-white/5">اللجنة</th>
                   <th className="p-6 border-l border-white/5">المقر</th>
                   <th className="p-6 text-center border-l border-white/5 bg-slate-800">سعة الطلاب</th>
                   <th className="p-6 text-center border-l border-white/5 bg-blue-900/50">عدد الملاحظين</th>
-                  {stages.map(s => (
+                  {/* المراحل مرتبة: أول، ثاني، ثالث */}
+                  {sortedStages.map(s => (
                     <th key={s.id} className="p-6 text-center border-l border-white/5 bg-slate-800">
                       {s.name}
                     </th>
@@ -204,7 +214,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                         </div>
                       </td>
 
-                      {stages.map(s => (
+                      {sortedStages.map(s => (
                         <td key={s.id} className="p-6 text-center border-l border-slate-50">
                           <div className="flex flex-col gap-1 items-center">
                               <input 
@@ -237,7 +247,6 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
             <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-4">
                <AlertCircle size={48} className="text-slate-200" />
                <p className="font-black text-lg">لا توجد لجان حالياً</p>
-               <p className="text-sm">أدخل عدد اللجان المطلوب واضغط على التوزيع الشامل للبدء</p>
             </div>
           )}
         </div>
