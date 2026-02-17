@@ -48,7 +48,6 @@ const Control: React.FC = () => {
     return groupedCommittees.find(c => c.number === selectedCommittee);
   }, [groupedCommittees, selectedCommittee]);
 
-  // دالة لترتيب المراحل بشكل صحيح (أول، ثاني، ثالث)
   const sortGrades = (grades: string[]) => {
     const order = ['أول', 'ثاني', 'ثالث'];
     return [...grades].sort((a, b) => {
@@ -88,30 +87,29 @@ const Control: React.FC = () => {
                           <div className="flex items-center justify-end gap-2 text-slate-900 font-black text-xl mb-3">
                              {comm.location} <MapPin size={20} className="text-rose-500" />
                           </div>
-                          {/* التعديل: عرض المراحل والعدد فوق بعضها مرتبة */}
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-col items-end gap-2 border-r-2 border-blue-100 pr-3">
                               {sortGrades(Object.keys(comm.stageBreakdown)).map((grade, i) => (
-                                  <div key={i} className="flex items-center gap-3 bg-slate-50 border border-slate-100 px-4 py-1.5 rounded-xl w-fit min-w-[120px] justify-between">
-                                      <span className="text-blue-600 font-black text-xs">{comm.stageBreakdown[grade]}</span>
-                                      <span className="text-[10px] text-slate-500 font-black">{grade}</span>
+                                  <div key={i} className="flex items-center gap-3 bg-slate-50/80 border border-slate-100 px-3 py-1.5 rounded-xl w-fit min-w-[150px] justify-between shadow-sm">
+                                      <span className="text-slate-800 font-black text-[11px] order-2">{grade}</span>
+                                      <span className="text-blue-700 font-black text-xs bg-white px-2 py-0.5 rounded-lg shadow-inner order-1">{comm.stageBreakdown[grade]}</span>
                                   </div>
                               ))}
                           </div>
                       </div>
-                      <div className="w-16 h-16 bg-white border border-slate-50 rounded-2xl flex flex-col items-center justify-center shadow-lg">
-                          <span className="text-3xl font-black text-slate-900 leading-none">{comm.number}</span>
-                          <span className="text-[8px] font-bold text-slate-300 uppercase">لجنة</span>
+                      <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex flex-col items-center justify-center shadow-lg">
+                          <span className="text-3xl font-black leading-none">{comm.number}</span>
+                          <span className="text-[8px] font-bold opacity-60 uppercase">لجنة رقم</span>
                       </div>
                   </div>
 
                   <div className="p-6 space-y-3 bg-slate-50/30">
                       {comm.exams.map((exam, idx) => (
-                          <div key={idx} className="bg-white p-4 rounded-2xl border-r-4 border-r-amber-400 shadow-sm flex justify-between items-center group/item hover:translate-x-1 transition-transform">
-                              <span className="bg-amber-50 text-amber-600 px-3 py-1 rounded-lg text-[10px] font-black">انتظار</span>
+                          <div key={idx} className="bg-white p-4 rounded-2xl border-r-4 border-r-blue-500 shadow-sm flex justify-between items-center">
+                              <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-lg text-[10px] font-black">انتظار</span>
                               <div className="text-right">
                                   <h5 className="font-black text-slate-800">{exam.subject}</h5>
                                   <div className="flex items-center justify-end gap-3 mt-1">
-                                      <span className="text-[10px] text-slate-400 font-bold">الفترة {exam.period === '1' ? 'الأولى' : 'الثانية'}</span>
+                                      <span className="text-[10px] text-slate-400 font-bold">الفترة {exam.period}</span>
                                       <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-md text-slate-500 text-[10px] font-black">
                                           <Clock size={10} /> {exam.startTime}
                                       </div>
@@ -126,34 +124,21 @@ const Control: React.FC = () => {
 
       {selectedCommittee && committeeForModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedCommittee(null)}></div>
-              <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative z-10 overflow-hidden animate-zoom-in">
-                  <button 
-                    onClick={() => setSelectedCommittee(null)} 
-                    className="absolute top-6 left-6 w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all"
-                  >
-                    <X size={20} />
-                  </button>
-
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedCommittee(null)}></div>
+              <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl relative z-10 overflow-hidden">
+                  <button onClick={() => setSelectedCommittee(null)} className="absolute top-6 left-6 w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center"><X size={20} /></button>
                   <div className="p-10 text-center space-y-6">
-                      <div className="space-y-1">
-                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">رقم اللجنة</p>
-                          <h3 className="text-7xl font-[1000] text-slate-900 tracking-tighter">{committeeForModal.number}</h3>
-                      </div>
-
-                      <div className="inline-flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 text-slate-600 font-black text-sm">
-                          {committeeForModal.location} <MapPin size={16} className="text-rose-500" />
-                      </div>
-
-                      <div className="bg-white p-6 rounded-[2.5rem] shadow-inner border-2 border-slate-900 mx-auto w-fit">
+                      <div className="text-2xl font-black text-slate-400">لجنة رقم</div>
+                      <div className="text-8xl font-black text-slate-900 mt-[-20px]">{committeeForModal.number}</div>
+                      <div className="inline-flex bg-slate-50 px-6 py-2 rounded-2xl font-black text-slate-600">{committeeForModal.location}</div>
+                      <div className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-900 mx-auto w-fit">
                           <QRCodeCanvas value={committeeForModal.number} size={180} level="H" />
                       </div>
-
                       <button 
-                        onClick={() => printStickerSingle(committeeForModal.number, committeeForModal.location, school)}
-                        className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
+                        onClick={() => printStickerSingle(committeeForModal.number, committeeForModal.location, school, committeeForModal.stageBreakdown)}
+                        className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3"
                       >
-                         <Printer size={22} /> طباعة الملصق التعريفي
+                         <Printer size={22} /> طباعة البطاقة التعريفية
                       </button>
                   </div>
               </div>
